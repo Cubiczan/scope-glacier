@@ -507,11 +507,13 @@ resource "aws_iam_role_policy" "lambda" {
 resource "aws_sqs_queue" "eia_ingestion_dlq" {
   name                      = "${var.project_name}-eia-ingestion-dlq"
   message_retention_seconds = 1209600 # 14 days
+  sqs_managed_sse_enabled   = true
 }
 
 resource "aws_sqs_queue" "glacier_analysis_dlq" {
   name                      = "${var.project_name}-analysis-dlq"
   message_retention_seconds = 1209600 # 14 days
+  sqs_managed_sse_enabled   = true
 }
 
 # ============================================================
