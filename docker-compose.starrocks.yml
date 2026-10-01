@@ -1,0 +1,101 @@
+# Local StarRocks FE + BE for the Scope.Glacier spike.
+# Athena, Glue, and the Iceberg warehouse are unchanged.
+# The init service loads native fixture tables and, when AWS keys are set,
+# registers an external Glue Iceberg catalog (see docs/STARROCKS.md).
+
+name: scope-glacier-starrocks
+
+services:
+  starrocks-fe:
+    image: starrocks/fe-ubuntu:3.3-latest
+    hostname: starrocks-fe
+    container_name: scope-glacier-starrocks-fe
+    user: root
+    environment:
+      AWS_EC2_METADATA_DISABLED: "true"
+    command:
+      - /bin/bash
+      - -c
+      - |
+        /opt/starrocks/fe/bin/start_fe.sh --host_type FQDN &
+        child=$$!
+        wait "$$child"
+        status=$$?
+        if [ "$$status" -ne 0 ]; then
+          exit "$$status"
+        fi
+        exec tail -F /opt/starrocks/fe/log/fe.log
+    ports:
+      - "8030:8030"
+      - "9020:9020"
+      - "9030:9030"
+    volumes:
+      - fe_meta:/opt/starrocks/fe/meta
+      - fe_log:/opt/starrocks/fe/log
+    healthcheck:
+      test: ["CMD-SHELL", "mysql -u root -h 127.0.0.1 -P 9030 -e \"SHOW FRONTENDS\\G\" | grep -q \"Alive: true\""]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
+  starrocks-be:
+    image: starrocks/be-ubuntu:3.3-latest
+    hostname: starrocks-be
+    container_name: scope-glacier-starrocks-be
+    user: root
+    environment:
+      AWS_EC2_METADATA_DISABLED: "true"
+    command:
+      - /bin/bash
+      - -c
+      - |
+        ulimit -n 65535 || true
+        ulimit -u 65535 || true
+        /opt/starrocks/be/bin/start_be.sh --host_type FQDN &
+        child=$$!
+        wait "$$child"
+        status=$$?
+        if [ "$$status" -ne 0 ]; then
+          exit "$$status"
+        fi
+        exec tail -F /opt/starrocks/be/log/be.INFO
+    ports:
+      - "8040:8040"
+      - "9060:9060"
+    volumes:
+      - be_storage:/opt/starrocks/be/storage
+      - be_log:/opt/starrocks/be/log
+    depends_on:
+      starrocks-fe:
+        condition: service_healthy
+
+  starrocks-init:
+    image: starrocks/fe-ubuntu:3.3-latest
+    container_name: scope-glacier-starrocks-init
+    user: root
+    entrypoint: ["/bin/bash", "/starrocks/init/bootstrap.sh"]
+    environment:
+      STARROCKS_HOST: starrocks-fe
+      STARROCKS_PORT: "9030"
+      STARROCKS_USER: root
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      GLUE_DATABASE: ${GLUE_DATABASE:-scope_glacier}
+      STARROCKS_RESEED: ${STARROCKS_RESEED:-}
+      AWS_EC2_METADATA_DISABLED: "true"
+    volumes:
+      - ./starrocks:/starrocks:ro
+    depends_on:
+      starrocks-fe:
+        condition: service_healthy
+      starrocks-be:
+        condition: service_started
+    restart: "no"
+
+volumes:
+  fe_meta:
+  fe_log:
+  be_storage:
+  be_log:

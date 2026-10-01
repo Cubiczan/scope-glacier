@@ -1,0 +1,28 @@
+{
+  "name": "query_energy_lake",
+  "description": "Read-only analytical SQL for Scope.Glacier energy tables through StarRocks. Uses the Glue Iceberg catalog when it is registered (the same tables Athena queries) and otherwise the local fixture database. Prefer question_id wti_balance for agent loops: one commodity, a bounded date range, and LIMIT.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "question_id": {
+        "type": "string",
+        "enum": [
+          "price_dashboard",
+          "supply_demand",
+          "infrastructure_disruption",
+          "latest_signal",
+          "wti_balance"
+        ],
+        "description": "Analytical question to run. wti_balance is the narrow, cache-friendly agent query."
+      }
+    },
+    "required": ["question_id"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "openWorldHint": false
+  },
+  "reference_cli": "python scripts/starrocks_agent_query.py <question_id>"
+}

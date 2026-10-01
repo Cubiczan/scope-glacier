@@ -56,6 +56,10 @@ crash.log
 *.json.lock
 data/
 
+# StarRocks local process files if a developer bind-mounts them
+starrocks/fe/
+starrocks/be/
+
 # CHP session artifacts (local only)
 .chp_registry.json
 .chp/sessions/

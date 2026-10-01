@@ -8,6 +8,8 @@
 
 **Scope.Glacier** is an energy markets intelligence platform built on AWS native services. It ingests spot prices and supply/demand data from the US EIA Open Data API, supplementary pricing from AlphaVantage and FRED, and uses Amazon Bedrock (Claude Haiku) to generate composite energy signals, supply/demand balance analysis, infrastructure disruption monitoring, and AI-powered price outlooks across crude oil, natural gas, gasoline, and heating oil.
 
+Amazon Athena remains the SQL engine for Glue ETL, Step Functions, and the checked-in views. An optional [StarRocks](docs/STARROCKS.md) FE/BE cluster can answer the same questions against the same Iceberg tables when an agent or dashboard needs lower latency and higher concurrency.
+
 ## Architecture
 
 ```
@@ -101,6 +103,7 @@
 - **AI-Powered Outlook**: Claude 3 Haiku generates narrative price direction analysis via Bedrock Converse API
 - **Volatility Computation**: Annualized rolling volatility with moving averages
 - **Athena Views**: Pre-built analytical views for price dashboard, S/D fundamentals, and disruption monitor
+- **StarRocks spike** (optional): FE/BE query layer on the same Iceberg tables for interactive and agent SQL
 
 ## Prerequisites
 
@@ -140,12 +143,49 @@ terraform apply
 python -m pytest tests/ -v
 ```
 
+### 5. Optional: StarRocks spike
+
+```bash
+docker compose -f docker-compose.starrocks.yml up -d
+docker compose -f docker-compose.starrocks.yml logs -f starrocks-init
+python scripts/starrocks_query.py
+python scripts/starrocks_agent_query.py wti_balance
+```
+
+Details, the Glue catalog mapping, and the Athena comparison are in [docs/STARROCKS.md](docs/STARROCKS.md).
+
+## StarRocks spike
+
+StarRocks sits beside Athena. Glue ETL, the Athena workgroup, and `src/aws/athena_views/` stay the batch and ad-hoc path. StarRocks is the interactive path: an FE plans MySQL-protocol queries and BEs scan the same Iceberg files, with a local data cache for repeated agent questions.
+
+| | Athena | StarRocks |
+|---|---|---|
+| Role in this product | Glue ETL, Step Functions, existing views, infrequent scans | Dashboards and agent loops over the same lake |
+| Data | S3 Iceberg via Glue `scope_glacier` | External catalog `scope_glacier_iceberg` on that Glue database |
+| Laptop demo | Needs AWS | `docker-compose.starrocks.yml` plus native fixture database `scope_glacier_demo` when AWS keys are unset |
+| Cost shape | Per TB scanned | Cluster uptime (local Compose is just the machine you already have) |
+
+```bash
+docker compose -f docker-compose.starrocks.yml up -d
+python scripts/starrocks_query.py --source fixture
+python scripts/starrocks_agent_query.py --dry-run
+```
+
+`scripts/starrocks_query.py` prints row counts and latency for the price dashboard, supply/demand fundamentals, and infrastructure disruption questions. `scripts/starrocks_agent_query.py` prints one of those questions as an MCP `tools/call` result. The narrow default, `wti_balance`, filters to WTI, the last 90 days, and `LIMIT 12`.
+
+To query the real lake, export `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION`, then `python scripts/starrocks_query.py --register-iceberg --source iceberg`. The primary path is that external Iceberg catalog. Native tables in `scope_glacier_demo` are the laptop fixture.
+
 ## Project Structure
 
 ```
 scope-glacier/
 ├── bedrock_client.py           # Bedrock Converse API wrapper
 ├── requirements.txt            # Python dependencies
+├── docker-compose.starrocks.yml # Optional FE/BE demo (Athena stays)
+├── docs/STARROCKS.md           # When to use StarRocks vs Athena
+├── starrocks/                  # Catalog SQL, fixtures, agent tool schema
+├── scripts/starrocks_query.py  # Latency demo for the analytical questions
+├── scripts/starrocks_agent_query.py # MCP-shaped tools/call result
 ├── src/
 │   ├── models/                 # Domain models (6)
 │   │   ├── energy_commodity.py #   Commodity reference (WTI, Brent, HH)
@@ -286,6 +326,8 @@ print(f"Offline: {ref.offline_bpd:,.0f} bpd")
 | Bedrock (Haiku) | 100K tokens/month              | ~$0.25      |
 | EventBridge     | 30 scheduled rules             | ~$0.30      |
 | **Total**       |                                | **~$9.50**  |
+
+StarRocks is not in that total. The Compose demo runs locally. EKS or StarRocks Cloud would be an extra always-on cost; leave it off until interactive query volume justifies a cluster. See [docs/STARROCKS.md](docs/STARROCKS.md).
 
 ## License
 
