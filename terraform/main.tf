@@ -422,6 +422,10 @@ resource "aws_glue_catalog_table" "energy_commodities" {
 
 # ============================================================
 # Athena Workgroup
+# Athena stays the batch / ad-hoc engine for Glue ETL and
+# src/aws/athena_views/. The optional StarRocks spike
+# (docs/STARROCKS.md) reads these same Iceberg tables through
+# a Glue external catalog and does not replace this workgroup.
 # ============================================================
 
 resource "aws_athena_workgroup" "glacier" {

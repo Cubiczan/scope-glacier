@@ -5,5 +5,7 @@ requests>=2.31.0
 python-dotenv>=1.0.0
 pyarrow>=14.0.0
 pandas>=2.1.0
+# StarRocks spike speaks the MySQL protocol. Athena and Glue do not import this.
+pymysql>=1.1.0
 cubiczan-resilience @ git+https://github.com/icohangar-ops/cubiczan-resilience.git#subdirectory=python
 scope-core @ git+https://github.com/icohangar-ops/cubiczan-resilience.git#subdirectory=scope-core
