@@ -445,6 +445,8 @@ resource "aws_athena_workgroup" "glacier" {
 # IAM Role for Lambda
 # ============================================================
 
+data "aws_caller_identity" "current" {}
+
 data "aws_iam_policy_document" "lambda_assume" {
   statement {
     effect = "Allow"
@@ -474,10 +476,22 @@ resource "aws_iam_role_policy" "lambda" {
           "s3:GetObject", "s3:PutObject", "s3:ListBucket",
           "athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults",
           "glue:*",
-          "bedrock:Converse",
           "logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents",
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "BedrockNovaConverse"
+        Effect = "Allow"
+        Action = [
+          "bedrock:Converse",
+          "bedrock:InvokeModel",
+          "bedrock:GetInferenceProfile",
+        ]
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/amazon.nova-*",
+          "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:inference-profile/us.amazon.nova-*",
+        ]
       },
       {
         Effect = "Allow"

@@ -2,11 +2,11 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![AWS](https://img.shields.io/badge/AWS-Native-orange.svg)](https://aws.amazon.com/)
-[![Tests](https://img.shields.io/badge/tests-41%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-64%20passing-brightgreen.svg)](tests/)
 
 ## Overview
 
-**Scope.Glacier** is an energy markets intelligence platform built on AWS native services. It ingests spot prices and supply/demand data from the US EIA Open Data API, supplementary pricing from AlphaVantage and FRED, and uses Amazon Bedrock (Claude Haiku) to generate composite energy signals, supply/demand balance analysis, infrastructure disruption monitoring, and AI-powered price outlooks across crude oil, natural gas, gasoline, and heating oil.
+**Scope.Glacier** is an energy markets intelligence platform built on AWS native services. It ingests spot prices and supply/demand data from the US EIA Open Data API, supplementary pricing from AlphaVantage and FRED, and uses Amazon Bedrock (Amazon Nova Lite) to generate composite energy signals, supply/demand balance analysis, infrastructure disruption monitoring, and AI-powered price outlooks across crude oil, natural gas, gasoline, and heating oil.
 
 ## Architecture
 
@@ -82,7 +82,7 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │               INTELLIGENCE LAYER (BEDROCK AI)                    │
 │  ┌────────────────────────────────────────────────────────────┐ │
-│  │  Claude 3 Haiku via Converse API                           │ │
+│  │  Amazon Nova Lite via Converse API                         │ │
 │  │  - Composite Glacier Signal Generation                     │ │
 │  │  - Supply/Demand Narrative Analysis                        │ │
 │  │  - Geopolitical Risk Assessment                            │ │
@@ -98,14 +98,14 @@
 - **Glacier Signal Engine**: Composite score (Supply/Demand 30% + Price Momentum 25% + Geopolitical 25% + Seasonal 20%)
 - **Supply/Demand Analysis**: Implied balance, inventory coverage days, spare capacity, drawdown risk
 - **Infrastructure Monitoring**: Pipeline utilization and disruption tracking, refinery offline capacity
-- **AI-Powered Outlook**: Claude 3 Haiku generates narrative price direction analysis via Bedrock Converse API
+- **AI-Powered Outlook**: Amazon Nova Lite (`us.amazon.nova-lite-v1:0` in us-east-1) generates narrative price direction analysis via the Bedrock Converse API. Anthropic model ids are rejected because Claude on Bedrock is Marketplace-billed and is not covered by AWS promo credits.
 - **Volatility Computation**: Annualized rolling volatility with moving averages
 - **Athena Views**: Pre-built analytical views for price dashboard, S/D fundamentals, and disruption monitor
 
 ## Prerequisites
 
 - Python 3.10+
-- AWS account with Bedrock access enabled
+- AWS account with Amazon Bedrock access enabled for Amazon Nova Lite (`us.amazon.nova-lite-v1:0`)
 - US EIA API key (free at https://www.eia.gov/opendata/)
 - AWS credentials configured (via `.env` or IAM)
 - Terraform 1.5+ (for infrastructure deployment)
@@ -163,7 +163,7 @@ scope-glacier/
 │   │   └── athena_views/       #   SQL views (3)
 │   └── lambda/                 #   Lambda handlers (2)
 ├── terraform/                  #   Infrastructure as Code
-└── tests/                      #   Test suite (41 tests)
+└── tests/                      #   Test suite (64 tests)
 ```
 
 ## Tracked Energy Commodities
@@ -276,16 +276,18 @@ print(f"Offline: {ref.offline_bpd:,.0f} bpd")
 
 ## AWS Cost Estimates (Monthly)
 
-| Service         | Usage                          | Est. Cost   |
-|-----------------|--------------------------------|-------------|
-| S3 Storage      | 50 GB Iceberg tables           | ~$1.20      |
-| Athena Queries  | 100 queries/month              | ~$5.00      |
-| Lambda          | 10K invocations                | ~$0.50      |
-| Step Functions  | 500 state transitions          | ~$0.75      |
-| Glue ETL        | 3 jobs x 10 min                | ~$1.50      |
-| Bedrock (Haiku) | 100K tokens/month              | ~$0.25      |
-| EventBridge     | 30 scheduled rules             | ~$0.30      |
-| **Total**       |                                | **~$9.50**  |
+| Service             | Usage                          | Est. Cost   |
+|---------------------|--------------------------------|-------------|
+| S3 Storage          | 50 GB Iceberg tables           | ~$1.20      |
+| Athena Queries      | 100 queries/month              | ~$5.00      |
+| Lambda              | 10K invocations                | ~$0.50      |
+| Step Functions      | 500 state transitions          | ~$0.75      |
+| Glue ETL            | 3 jobs x 10 min                | ~$1.50      |
+| Bedrock (Nova Lite) | 100K tokens/month              | ~$0.02      |
+| EventBridge         | 30 scheduled rules             | ~$0.30      |
+| **Total**           |                                | **~$9.30**  |
+
+Nova Lite on-demand pricing in us-east-1 is $0.06 per 1M input tokens and $0.24 per 1M output tokens, so 100K tokens is about $0.02.
 
 ## License
 

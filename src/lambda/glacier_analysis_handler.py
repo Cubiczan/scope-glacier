@@ -15,6 +15,7 @@ from datetime import datetime
 
 import boto3
 
+from bedrock_client import resolve_bedrock_model_id
 from cubiczan_resilience import resilient
 from scope_core import (
     SafeAthenaClient,
@@ -191,16 +192,25 @@ def compute_glacier_scores(event):
     return signals
 
 
-@resilient(timeout=60, max_attempts=3)
 def invoke_bedrock_analysis(commodity_code: str, signal_data: dict) -> str:
     """Invoke Bedrock Converse API for energy market AI analysis.
 
-    Wrapped with @resilient so transient Bedrock throttling/timeouts are retried
-    with exponential backoff + jitter; the existing try/except still degrades
-    gracefully to an "Analysis unavailable" string once retries are exhausted.
+    The model id is resolved before any retry or API call. An Anthropic override
+    raises immediately. Transient Bedrock throttling is retried inside
+    ``_invoke_bedrock_converse``.
+    """
+    model_id = resolve_bedrock_model_id()
+    return _invoke_bedrock_converse(commodity_code, signal_data, model_id)
+
+
+@resilient(timeout=60, max_attempts=3)
+def _invoke_bedrock_converse(commodity_code: str, signal_data: dict, model_id: str) -> str:
+    """Call Converse and degrade to an "Analysis unavailable" string after retries.
+
+    Transient throttling and timeouts are retried with exponential backoff and
+    jitter. The model id is already validated by the caller.
     """
     bedrock = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION", "us-east-1"))
-    model_id = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
 
     prompt = f"""Analyze {commodity_code} energy market:
 
