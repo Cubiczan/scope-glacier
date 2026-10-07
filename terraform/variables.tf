@@ -25,9 +25,17 @@ variable "glue_database" {
 }
 
 variable "bedrock_model_id" {
-  description = "Amazon Bedrock model ID for Converse API"
+  description = "Amazon Bedrock Converse model ID. Amazon Nova is credit-eligible; Anthropic Claude is not."
   type        = string
-  default     = "anthropic.claude-3-haiku-20240307-v1:0"
+  default     = "us.amazon.nova-lite-v1:0"
+
+  validation {
+    condition = (
+      !startswith(lower(var.bedrock_model_id), "anthropic.")
+      && !strcontains(lower(var.bedrock_model_id), ".anthropic.")
+    )
+    error_message = "Anthropic Claude models are not allowed. Claude on Amazon Bedrock is billed through AWS Marketplace and is not covered by AWS promo credits. Use an Amazon Nova model such as us.amazon.nova-lite-v1:0."
+  }
 }
 
 variable "eia_api_key" {
